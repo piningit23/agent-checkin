@@ -32,7 +32,7 @@
   <p>Badge: <b id="badge">…</b></p>
   <img id="badgeImg" style="display:none" alt="Badge NFT">
   <p class="muted">Kontrak: <code id="contractAddr"></code></p>
-  <button id="checkinBtn">✅ Check-in Hari Ini</button>
+  <button id="checkinBtn" disabled>✅ Check-in Hari Ini</button>
   <p id="txLine" class="muted"></p>
 </div>
 
@@ -74,9 +74,10 @@ providerStatus();
 setTimeout(providerStatus, 1000); // sebagian wallet inject-nya telat
 
 async function refresh() {
-  const bal = await new ethers.Contract(AGENT_ID_CONTRACT, AGENT_ID_ABI, provider).balanceOf(user);
-  const hasId = bal > 0n;
-  $("agentIdStatus").innerHTML = hasId ? '<span class="ok">✅ Dimiliki</span>' : '<span class="bad">❌ Belum punya — klaim dulu di Binance App: Wallet &gt; banner Agent ID</span>';
+  try {
+    const bal = await new ethers.Contract(AGENT_ID_CONTRACT, AGENT_ID_ABI, provider).balanceOf(user);
+    const hasId = bal > 0n;
+    $("agentIdStatus").innerHTML = hasId ? '<span class="ok">✅ Dimiliki</span>' : '<span class="bad">❌ Wallet ini tidak punya Agent ID — ganti ke wallet Agent ID (baiqlah.ai) di browser, lalu connect ulang</span>';
   $("streak").textContent = await checkin.streak(user);
   $("total").textContent = await checkin.totalCheckinsByUser(user);
   const badgeId = await checkin.badgeOf(user);
@@ -90,35 +91,46 @@ async function refresh() {
   const can = await checkin.canCheckInToday(user);
   $("checkinBtn").disabled = !hasId || !can;
   $("checkinBtn").textContent = !hasId ? "Butuh Agent ID dulu" : !can ? "✅ Sudah check-in hari ini" : "✅ Check-in Hari Ini";
+  } catch (e) {
+    $("walletLine").textContent = "Gagal membaca status (kemungkinan jaringan bukan BSC): " + (e.reason || e.message || e);
+    $("checkinBtn").disabled = true;
+  }
 }
 
 $("connectBtn").onclick = async () => {
   try {
     if (typeof ethers === "undefined") { $("walletLine").textContent = "Gagal memuat library — cek koneksi lalu refresh halaman."; return; }
     if (!window.ethereum) { $("walletLine").innerHTML = "Tidak ada wallet di browser ini. Buka lewat <b>browser dApp Binance App</b> (Web3 Wallet &rarr; Discover &rarr; paste link ini)."; return; }
-    // Provider Binance belum tentu mengembalikan chainId sebelum connect
-    // (sering string kosong → ethers error "invalid BigNumberish: empty string").
-    // Jadi jangan deteksi network dulu: paksa BSC (56), baca chainId mentah
-    // dengan toleransi, dan pindah chain hanya kalau chain-nya jelas bukan BSC.
+    // Urutan baru: connect dulu, BARU cek chain. Provider Binance sering
+    // mengembalikan chainId kosong sebelum connect (dulu bikin error
+    // "invalid BigNumberish: empty string"), dan nilainya baru benar
+    // setelah akun dipilih. Jangan sampai tx terkirim di chain yang salah.
     provider = new ethers.BrowserProvider(window.ethereum, 56);
-    let cid = null;
-    try {
-      const raw = await window.ethereum.request({ method: "eth_chainId" });
-      cid = (raw === "" || raw == null) ? null : parseInt(raw, 16);
-      if (Number.isNaN(cid)) cid = null;
-    } catch (e) { cid = null; }
-    if (cid !== null && cid !== 56) {
-      try {
-        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
-      } catch (e) {
-        $("walletLine").textContent = "Pindah ke BNB Chain mainnet (chain 56) dulu di wallet kamu, lalu pencet Connect lagi.";
-        return;
-      }
-    }
     await provider.send("eth_requestAccounts", []);
     signer = await provider.getSigner();
     user = await signer.getAddress();
     checkin = new ethers.Contract(CHECKIN_CONTRACT, CHECKIN_ABI, signer);
+    const readChain = async () => {
+      try {
+        const raw = await window.ethereum.request({ method: "eth_chainId" });
+        const n = (raw === "" || raw == null) ? null : parseInt(raw, 16);
+        return Number.isNaN(n) ? null : n;
+      } catch (e) { return null; }
+    };
+    let cid = await readChain();
+    if (cid !== null && cid !== 56) {
+      try {
+        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+      } catch (e) {
+        $("walletLine").textContent = "Wallet masih di jaringan lain — pindah ke BNB Chain mainnet (56) dulu, lalu pencet Connect lagi.";
+        return;
+      }
+      cid = await readChain();
+      if (cid !== null && cid !== 56) {
+        $("walletLine").textContent = "Masih bukan BNB Chain — pindah dulu ke BSC di wallet kamu, lalu pencet Connect lagi.";
+        return;
+      }
+    }
     $("walletLine").textContent = "Terhubung: " + user;
     $("contractAddr").textContent = CHECKIN_CONTRACT;
     $("statusCard").style.display = "block";
