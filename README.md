@@ -72,11 +72,13 @@ forge verify-contract <ALAMAT_KONTRAK> src/AgentCheckin.sol:AgentCheckin \
 
 Harga BNB saat ukur: **~$592,53** (Finnhub, 19 Nov 2026 13:07 UTC).
 
-| Aksi | Gas | @1 gwei | @3 gwei | @5 gwei |
+**Harga gas BSC saat ini: 0,05 gwei** (floor validator sejak Okt 2025 — diverifikasi live 19 Nov 2026 via tracker BNB Chain: Normal 0,05 gwei). Jadi biaya deploy nyata: 1.678.099 gas × 0,05 gwei ≈ **0,000084 BNB (~Rp 800)** — BUKAN angka @3 gwei di bawah, itu patokan lama dari era gas 3 gwei. Saldo farming saat preview 0,000833 BNB, jadi deploy muat ~10x lipat.
+
+| Aksi | Gas | @0,05 gwei (harga live) | @1 gwei | @3 gwei (patokan lama) |
 |---|---|---|---|---|
-| Deploy `AgentCheckin` | 1.678.099 | 0,001678 BNB (~$0,99) | 0,005034 BNB (~$2,98) | 0,008390 BNB (~$4,97) |
-| Check-in pertama (mint badge) | 194.571 | 0,000195 BNB (~$0,12) | 0,000584 BNB (~$0,35) | 0,000973 BNB (~$0,58) |
-| Check-in harian berikutnya | 52.482 | 0,000052 BNB (~$0,03) | 0,000157 BNB (~$0,09) | 0,000262 BNB (~$0,16) |
+| Deploy `AgentCheckin` | 1.678.099 | **0,000084 BNB (~Rp 800)** | 0,001678 BNB (~$0,99) | 0,005034 BNB (~$2,98) |
+| Check-in pertama (mint badge) | 194.571 | 0,0000097 BNB | 0,000195 BNB (~$0,12) | 0,000584 BNB (~$0,35) |
+| Check-in harian berikutnya | 52.482 | 0,0000026 BNB | 0,000052 BNB (~$0,03) | 0,000157 BNB (~$0,09) |
 
 Gas BSC mainnet bisa berbeda sedikit dari anvil; angka di atas patokan kasar.
 
@@ -92,9 +94,9 @@ Gas BSC mainnet bisa berbeda sedikit dari anvil; angka di atas patokan kasar.
 
 ## Checklist submit hackathon
 
-- [ ] Deploy `AgentCheckin` ke **BNB Chain mainnet** (butuh gas Bos, tunggu persetujuan).
+- [x] Deploy `AgentCheckin` ke **BNB Chain mainnet** — LIVE 19 Nov 2026 ~21:17 WIB: `0x8B3926987631bB8045B60F48e29C107B0259d322`, tx `0xac559a4f9a5f9d1ac54c5032208b7bd080e6ef0aae4c200b0d50d3fed9211009`, gas 1.678.099 @ 0,05 gwei = 0,0000839 BNB (~Rp 800). Deployer farming.
 - [ ] Verifikasi source + open-source di **BscScan**.
-- [ ] Hosting frontend (website proyek) — wajib diisi saat submit.
+- [x] Hosting frontend (website proyek) — LIVE 19 Nov 2026 ~20:14 WIB: https://piningit23.github.io/agent-checkin/ (alamat kontrak diisi setelah deploy).
 - [ ] Submit: nama proyek, website, alamat kontrak, deskripsi penggunaan Agent ID.
 - [ ] **Innovation Award**: produk live + minimal **30 alamat Agent ID** sudah berinteraksi selama periode submit — ini syarat paling berat; butuh promosi ke komunitas Agent ID (badge gratis + streak adalah umpannya).
 - [ ] **Project Awards**: ranking dari data on-chain (jumlah alamat Agent ID berinteraksi, volume/tx) — sama, butuh user nyata.
@@ -104,7 +106,7 @@ Gas BSC mainnet bisa berbeda sedikit dari anvil; angka di atas patokan kasar.
 ## Yang masih kurang sebelum submit
 
 1. **Belum deploy mainnet** — butuh persetujuan + gas Bos.
-2. **Belum ada website live** — frontend sudah jadi, belum di-hosting.
+2. **Website SUDAH live** — https://piningit23.github.io/agent-checkin/ (19 Nov ~20:14 WIB); tinggal isi alamat kontrak setelah deploy.
 3. **0 interaktor Agent ID** — butuh minimal 30 untuk Innovation Award; perlu promosi.
 4. **Nama proyek final** — saat ini "Agent Check-in"; jangan pakai kata "Binance"/"BNB" di nama/domain.
 5. **Jalur Promotion X** — dikerjakan terpisah dari dApp ini.
