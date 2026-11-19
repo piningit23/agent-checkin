@@ -96,17 +96,24 @@ $("connectBtn").onclick = async () => {
   try {
     if (typeof ethers === "undefined") { $("walletLine").textContent = "Gagal memuat library — cek koneksi lalu refresh halaman."; return; }
     if (!window.ethereum) { $("walletLine").innerHTML = "Tidak ada wallet di browser ini. Buka lewat <b>browser dApp Binance App</b> (Web3 Wallet &rarr; Discover &rarr; paste link ini)."; return; }
-    provider = new ethers.BrowserProvider(window.ethereum);
-    let net = await provider.getNetwork();
-    if (net.chainId !== BSC_CHAIN_ID) {
+    // Provider Binance belum tentu mengembalikan chainId sebelum connect
+    // (sering string kosong → ethers error "invalid BigNumberish: empty string").
+    // Jadi jangan deteksi network dulu: paksa BSC (56), baca chainId mentah
+    // dengan toleransi, dan pindah chain hanya kalau chain-nya jelas bukan BSC.
+    provider = new ethers.BrowserProvider(window.ethereum, 56);
+    let cid = null;
+    try {
+      const raw = await window.ethereum.request({ method: "eth_chainId" });
+      cid = (raw === "" || raw == null) ? null : parseInt(raw, 16);
+      if (Number.isNaN(cid)) cid = null;
+    } catch (e) { cid = null; }
+    if (cid !== null && cid !== 56) {
       try {
         await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
-        net = await provider.getNetwork();
       } catch (e) {
         $("walletLine").textContent = "Pindah ke BNB Chain mainnet (chain 56) dulu di wallet kamu, lalu pencet Connect lagi.";
         return;
       }
-      if (net.chainId !== BSC_CHAIN_ID) { $("walletLine").textContent = "Masih bukan BNB Chain mainnet — pindah dulu ke BSC, lalu pencet Connect lagi."; return; }
     }
     await provider.send("eth_requestAccounts", []);
     signer = await provider.getSigner();
