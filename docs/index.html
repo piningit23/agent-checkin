@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Check-in — Binance Agent ID Hackathon</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<style>
+  body { font-family: system-ui, sans-serif; background: #0b0e14; color: #eaeaea; max-width: 560px; margin: 40px auto; padding: 0 16px; }
+  h1 { color: #f0b90b; font-size: 24px; }
+  .card { background: #161b26; border: 1px solid #2a3242; border-radius: 12px; padding: 16px; margin: 12px 0; }
+  button { background: #f0b90b; color: #111; border: none; border-radius: 8px; padding: 12px 20px; font-weight: bold; cursor: pointer; width: 100%; }
+  button:disabled { background: #555; color: #999; cursor: not-allowed; }
+  .ok { color: #3fca6e; } .bad { color: #ff5c5c; } .muted { color: #999; font-size: 13px; }
+  #badgeImg { max-width: 220px; border-radius: 12px; margin-top: 8px; }
+  code { background: #222; padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+</style>
+</head>
+<body>
+<h1>🪪 Agent Check-in</h1>
+<p class="muted">Check-in harian khusus pemegang Binance Agent ID (name.ai). Check-in pertama mint badge NFT soulbound gratis. Dibangun untuk Binance Agent ID Hackathon — total hadiah 60.000 USDC.</p>
+
+<div class="card">
+  <button id="connectBtn">Connect Wallet</button>
+  <p id="walletLine" class="muted">Belum terhubung. Koneksi hanya lewat wallet kamu sendiri (MetaMask) — tanpa QR, tanpa login pihak ketiga.</p>
+</div>
+
+<div class="card" id="statusCard" style="display:none">
+  <p>Agent ID: <b id="agentIdStatus">…</b></p>
+  <p>Streak: <b id="streak">…</b> hari</p>
+  <p>Total check-in: <b id="total">…</b></p>
+  <p>Badge: <b id="badge">…</b></p>
+  <img id="badgeImg" style="display:none" alt="Badge NFT">
+  <p class="muted">Kontrak: <code id="contractAddr"></code></p>
+  <button id="checkinBtn">✅ Check-in Hari Ini</button>
+  <p id="txLine" class="muted"></p>
+</div>
+
+<script>
+// ===== KONFIGURASI =====
+// Isi alamat kontrak setelah deploy mainnet. Untuk testing lokal/anvil atau
+// BSC testnet, override lewat URL: index.html?contract=0x...
+const AGENT_ID_CONTRACT = "0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F"; // SPACE ID Agent ID, BSC mainnet
+const BSC_CHAIN_ID = 56n;
+let CHECKIN_CONTRACT = new URLSearchParams(location.search).get("contract") || "0x0000000000000000000000000000000000000000";
+
+const CHECKIN_ABI = [
+  "function checkIn()",
+  "function streak(address) view returns (uint256)",
+  "function totalCheckinsByUser(address) view returns (uint256)",
+  "function badgeOf(address) view returns (uint256)",
+  "function canCheckInToday(address) view returns (bool)",
+  "function tokenURI(uint256) view returns (string)",
+  "function agentID() view returns (address)"
+];
+const AGENT_ID_ABI = ["function balanceOf(address) view returns (uint256)"];
+
+let provider, signer, user, checkin;
+
+const $ = id => document.getElementById(id);
+
+async function refresh() {
+  const bal = await new ethers.Contract(AGENT_ID_CONTRACT, AGENT_ID_ABI, provider).balanceOf(user);
+  const hasId = bal > 0n;
+  $("agentIdStatus").innerHTML = hasId ? '<span class="ok">✅ Dimiliki</span>' : '<span class="bad">❌ Belum punya — klaim dulu di Binance App: Wallet &gt; banner Agent ID</span>';
+  $("streak").textContent = await checkin.streak(user);
+  $("total").textContent = await checkin.totalCheckinsByUser(user);
+  const badgeId = await checkin.badgeOf(user);
+  $("badge").textContent = badgeId == 0n ? "Belum ada — mint otomatis di check-in pertama" : "#" + badgeId;
+  if (badgeId > 0n) {
+    const uri = await checkin.tokenURI(badgeId);
+    const json = JSON.parse(atob(uri.split(",")[1]));
+    $("badgeImg").src = json.image;
+    $("badgeImg").style.display = "block";
+  }
+  const can = await checkin.canCheckInToday(user);
+  $("checkinBtn").disabled = !hasId || !can;
+  $("checkinBtn").textContent = !hasId ? "Butuh Agent ID dulu" : !can ? "✅ Sudah check-in hari ini" : "✅ Check-in Hari Ini";
+}
+
+$("connectBtn").onclick = async () => {
+  if (!window.ethereum) { alert("MetaMask tidak ditemukan. Pasang MetaMask dulu."); return; }
+  provider = new ethers.BrowserProvider(window.ethereum);
+  const net = await provider.getNetwork();
+  if (net.chainId !== BSC_CHAIN_ID && CHECKIN_CONTRACT !== "0x0000000000000000000000000000000000000000") {
+    alert("Pindah ke BNB Chain mainnet (chain 56) dulu di MetaMask.");
+    return;
+  }
+  await provider.send("eth_requestAccounts", []);
+  signer = await provider.getSigner();
+  user = await signer.getAddress();
+  checkin = new ethers.Contract(CHECKIN_CONTRACT, CHECKIN_ABI, signer);
+  $("walletLine").textContent = "Terhubung: " + user;
+  $("contractAddr").textContent = CHECKIN_CONTRACT;
+  $("statusCard").style.display = "block";
+  await refresh();
+};
+
+$("checkinBtn").onclick = async () => {
+  try {
+    $("checkinBtn").disabled = true;
+    $("txLine").textContent = "Menunggu konfirmasi di wallet kamu…";
+    const tx = await checkin.checkIn();
+    $("txLine").textContent = "Tx terkirim: " + tx.hash + " — menunggu konfirmasi…";
+    await tx.wait();
+    $("txLine").innerHTML = '✅ Check-in berhasil! <a href="https://bscscan.com/tx/' + tx.hash + '" target="_blank">Lihat di BscScan</a>';
+    await refresh();
+  } catch (e) {
+    $("txLine").textContent = "❌ Gagal: " + (e.reason || e.message || e);
+    $("checkinBtn").disabled = false;
+  }
+};
+</script>
+</body>
+</html>
