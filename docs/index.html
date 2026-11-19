@@ -22,7 +22,7 @@
 
 <div class="card">
   <button id="connectBtn">Connect Wallet</button>
-  <p id="walletLine" class="muted">Belum terhubung. Koneksi hanya lewat wallet kamu sendiri (MetaMask) — tanpa QR, tanpa login pihak ketiga.</p>
+  <p id="walletLine" class="muted">Mengecek wallet…</p>
 </div>
 
 <div class="card" id="statusCard" style="display:none">
@@ -59,6 +59,20 @@ let provider, signer, user, checkin;
 
 const $ = id => document.getElementById(id);
 
+// Deteksi wallet saat halaman dimuat — pesan tampil di halaman, bukan popup
+// (popup alert sering ketelen di webview HP sehingga tombol kelihatan mati).
+function providerStatus() {
+  if (window.ethereum) {
+    const p = window.ethereum;
+    const name = p.isBinance ? "Binance Wallet" : p.isMetaMask ? "MetaMask" : "wallet";
+    $("walletLine").innerHTML = "Wallet terdeteksi: <b>" + name + "</b> — pencet Connect Wallet.";
+  } else {
+    $("walletLine").innerHTML = "Tidak ada wallet di browser ini. Buka halaman ini lewat <b>browser dApp Binance App</b> (Web3 Wallet &rarr; Discover &rarr; paste link ini). Link dari WhatsApp/Chrome tidak membawa wallet.";
+  }
+}
+providerStatus();
+setTimeout(providerStatus, 1000); // sebagian wallet inject-nya telat
+
 async function refresh() {
   const bal = await new ethers.Contract(AGENT_ID_CONTRACT, AGENT_ID_ABI, provider).balanceOf(user);
   const hasId = bal > 0n;
@@ -79,21 +93,32 @@ async function refresh() {
 }
 
 $("connectBtn").onclick = async () => {
-  if (!window.ethereum) { alert("MetaMask tidak ditemukan. Pasang MetaMask dulu."); return; }
-  provider = new ethers.BrowserProvider(window.ethereum);
-  const net = await provider.getNetwork();
-  if (net.chainId !== BSC_CHAIN_ID && CHECKIN_CONTRACT !== "0x0000000000000000000000000000000000000000") {
-    alert("Pindah ke BNB Chain mainnet (chain 56) dulu di MetaMask.");
-    return;
+  try {
+    if (typeof ethers === "undefined") { $("walletLine").textContent = "Gagal memuat library — cek koneksi lalu refresh halaman."; return; }
+    if (!window.ethereum) { $("walletLine").innerHTML = "Tidak ada wallet di browser ini. Buka lewat <b>browser dApp Binance App</b> (Web3 Wallet &rarr; Discover &rarr; paste link ini)."; return; }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    let net = await provider.getNetwork();
+    if (net.chainId !== BSC_CHAIN_ID) {
+      try {
+        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x38" }] });
+        net = await provider.getNetwork();
+      } catch (e) {
+        $("walletLine").textContent = "Pindah ke BNB Chain mainnet (chain 56) dulu di wallet kamu, lalu pencet Connect lagi.";
+        return;
+      }
+      if (net.chainId !== BSC_CHAIN_ID) { $("walletLine").textContent = "Masih bukan BNB Chain mainnet — pindah dulu ke BSC, lalu pencet Connect lagi."; return; }
+    }
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    user = await signer.getAddress();
+    checkin = new ethers.Contract(CHECKIN_CONTRACT, CHECKIN_ABI, signer);
+    $("walletLine").textContent = "Terhubung: " + user;
+    $("contractAddr").textContent = CHECKIN_CONTRACT;
+    $("statusCard").style.display = "block";
+    await refresh();
+  } catch (e) {
+    $("walletLine").textContent = "Gagal connect: " + (e.reason || e.message || e);
   }
-  await provider.send("eth_requestAccounts", []);
-  signer = await provider.getSigner();
-  user = await signer.getAddress();
-  checkin = new ethers.Contract(CHECKIN_CONTRACT, CHECKIN_ABI, signer);
-  $("walletLine").textContent = "Terhubung: " + user;
-  $("contractAddr").textContent = CHECKIN_CONTRACT;
-  $("statusCard").style.display = "block";
-  await refresh();
 };
 
 $("checkinBtn").onclick = async () => {
